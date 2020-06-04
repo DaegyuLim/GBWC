@@ -27,6 +27,7 @@ TocabiController::TocabiController(DataContainer &dc_global, StateManager &sm, D
     point_pub2 = dc.nh.advertise<geometry_msgs::PolygonStamped>("/tocabi/point_pub2", 1);
     //pointpub_msg.polygon.points.reserve(20);
 
+    walking_speed_command = dc.nh.subscribe("/tocabi/walkingspeedcommand", 100, &TocabiController::WalkingSpeedCommandCallback, this);
 }
 
 void TocabiController::pubfromcontroller()
@@ -213,6 +214,13 @@ void TocabiController::ArmTaskCommandCallback(const tocabi_controller::ArmTaskCo
     std::cout << "Target Pos Left: " << tocabi_.link_[Left_Hand].x_desired << endl;
     std::cout << "Target Pos Right: " << tocabi_.link_[Right_Hand].x_desired << endl;
 }
+
+void TocabiController::WalkingSpeedCommandCallback(const std_msgs::Float32 &msg)
+{
+    double walking_speed_temp = msg.data;
+    setWalkingParameter( walking_duration_, walking_speed_temp, step_width_, knee_target_angle_);
+}
+
 void TocabiController::stateThread()
 {
     s_.connect();
@@ -2532,14 +2540,14 @@ void TocabiController::setWalkingParameter(double walking_duration, double walki
 void TocabiController::initWalkingParameter()
 {
     walking_mode_on_ = true;
-    stop_vel_threshold_ =  0.10;
+    stop_vel_threshold_ =  0.25;
     walking_duration_ = 0.6;
-    walking_speed_ = 0.2;
-    step_width_ = 0.090;
+    walking_speed_ = 0.0;
+    step_width_ = 0.09;
     knee_target_angle_ = 0.1;                               //4.5degree
     // knee_target_angle_ = M_PI/40;                               //4.5degree
     yaw_angular_vel_ = 1;                                       //   rad/s
-    swing_foot_height_ = 0.07;
+    swing_foot_height_ = 0.05;
     switching_phase_duration_ = 0.01;
 
     first_step_flag_ = true;
@@ -2755,7 +2763,7 @@ void TocabiController::walkingStateManager()
             foot_contact_ = -foot_contact_;
             stop_walking_trigger_ == false;
             foot_swing_trigger_ = true;         
-            cout<<" ################################ Support Foot Changed! ################################"<<endl;                 
+            // cout<<" ################################ Support Foot Changed! ################################"<<endl;                 
         }
 
         start_time_ = current_time_;
@@ -2796,12 +2804,20 @@ bool TocabiController::balanceTrigger(Eigen::Vector2d com_pos_2d, Eigen::Vector2
     //     cout<<"Catpure point in Y axis is over the safety boundary! balance swing foot control activated"<<endl;
     // }
 
-    if( com_vel_2d.norm() > stop_vel_threshold_)
+    if(com_vel_2d.norm() > stop_vel_threshold_)
     {
         trigger = true;
         cout<<"com vel is over the limit ("<< com_vel_2d.norm()<<")"<<endl;
     }
     
+    if(lfoot_transform_current_from_global_.translation()(0) - rfoot_transform_current_from_global_.translation()(0) > 0.03)
+    {
+        trigger = true; // check foot position in x direction
+    }
+    if(lfoot_transform_current_from_global_.translation()(1) - rfoot_transform_current_from_global_.translation()(1) > 0.22)
+    {
+        trigger = true; // check foot position in y direction
+    }
 
     return trigger;
 }
@@ -3180,8 +3196,10 @@ void TocabiController::getSwingFootXYTrajectory(double phase, Eigen::Vector3d co
         //     d_prime(1) = DyrosMath::minmax_cut(d_prime(1), rfoot_transform_current_from_global_.translation()(1)+0.22, rfoot_transform_current_from_global_.translation()(1)+0.4);
         // }
         
+        // 
+        if(walking_phase_ < 0.95)
+            target_foot_landing_from_pelv_ = com_pos_current.segment<2>(0) + d_prime;
 
-        target_foot_landing_from_pelv_ = com_pos_current.segment<2>(0) + d_prime;
         // target_foot_landing_from_pelv_ = d_prime; //consider pelvis origin(0, 0, 0) as a com
         
         // if(foot_contact_ == 1) //left support
@@ -3243,15 +3261,16 @@ void TocabiController::getSwingFootXYTrajectory(double phase, Eigen::Vector3d co
         //     cout<<"####################### swing foot trajectory is out of workspace #####################"<<endl;
         // }
 
+        // restriction on the swing foot position
         if(foot_contact_ == 1) //left support
         {
             swing_foot_pos_trajectory_from_global_(0) = DyrosMath::minmax_cut(swing_foot_pos_trajectory_from_global_(0), lfoot_transform_current_from_global_.translation()(0)-0.5, lfoot_transform_current_from_global_.translation()(0)+1.0);
-            swing_foot_pos_trajectory_from_global_(1) = DyrosMath::minmax_cut(swing_foot_pos_trajectory_from_global_(1), lfoot_transform_current_from_global_.translation()(1)-0.8, lfoot_transform_current_from_global_.translation()(1)-0.2);
+            swing_foot_pos_trajectory_from_global_(1) = DyrosMath::minmax_cut(swing_foot_pos_trajectory_from_global_(1), lfoot_transform_current_from_global_.translation()(1)-0.8, lfoot_transform_current_from_global_.translation()(1)-0.20);
         }
         else if (foot_contact_ == -1) // right support
         {
             swing_foot_pos_trajectory_from_global_(0) = DyrosMath::minmax_cut(swing_foot_pos_trajectory_from_global_(0), rfoot_transform_current_from_global_.translation()(0)-0.5, rfoot_transform_current_from_global_.translation()(0)+1.0);
-            swing_foot_pos_trajectory_from_global_(1) = DyrosMath::minmax_cut(swing_foot_pos_trajectory_from_global_(1), rfoot_transform_current_from_global_.translation()(1)+0.2, rfoot_transform_current_from_global_.translation()(1)+0.8);
+            swing_foot_pos_trajectory_from_global_(1) = DyrosMath::minmax_cut(swing_foot_pos_trajectory_from_global_(1), rfoot_transform_current_from_global_.translation()(1)+0.20, rfoot_transform_current_from_global_.translation()(1)+0.8);
         }
 
         // if (swing_foot_pos_trajectory_from_global_.norm() > 0.7)
@@ -4440,15 +4459,15 @@ Eigen::VectorQd TocabiController::jointComTrackingTuning()
     double kp_ank_sag = 0.1; //x direction ankle pitch gain for com position error
     double kv_ank_sag = 0.1; //x direction ankle pitch gain for com velocity error
 
-    double kp_ank_cor = 0.1; //y direction ankle pitch gain for com position error
-    double kv_ank_cor = 0.1; //y direction ankle pitch gain for com velocity error
+    double kp_ank_cor = 0.1; //y direction ankle roll gain for com position error
+    double kv_ank_cor = 0.1; //y direction ankle roll gain for com velocity error
 
     //hip
-    double kp_hip_sag = 0;//0.01; //x direction ankle pitch gain for com position error
-    double kv_hip_sag = 0;//0.05; //x direction ankle pitch gain for com velocity error
+    double kp_hip_sag = 0.00;//0.01; //x direction hip pitch gain for com position error
+    double kv_hip_sag = 0.00;//0.05; //x direction hip pitch gain for com velocity error
 
-    double kp_hip_cor = 0;//0.2; //y direction ankle pitch gain for com position error
-    double kv_hip_cor = 0;//0.2; //y direction ankle pitch gain for com velocity error
+    double kp_hip_cor = 0;//0.2; //y direction hip roll gain for com position error
+    double kv_hip_cor = 0;//0.2; //y direction hip roll gain for com velocity error
 
     
     if(foot_swing_trigger_ == true)
@@ -4751,8 +4770,8 @@ Eigen::VectorQd TocabiController::tuneTorqueForZMPSafety(Eigen::VectorQd task_to
 
             Vector3d phi_support_ankle;
             phi_support_ankle = -DyrosMath::getPhi(tocabi_.link_[Left_Foot].Rotm, pelv_yaw_rot_current_from_global_);
-            left_ankle_pitch_tune *= DyrosMath::cubic( abs(phi_support_ankle(1)) , 0.00, 0.05, 1, 0, 0, 0);
-            left_ankle_roll_tune *= DyrosMath::cubic( abs(phi_support_ankle(0)) , 0.00, 0.05, 1, 0, 0, 0);
+            left_ankle_pitch_tune *= DyrosMath::cubic( abs(phi_support_ankle(1)) , 0.01, 0.05, 1, 0, 0, 0);
+            left_ankle_roll_tune *= DyrosMath::cubic( abs(phi_support_ankle(0)) , 0.01, 0.05, 1, 0, 0, 0);
             
             left_ankle_pitch_tune *= DyrosMath::cubic(l_ft_(2) , -tocabi_.com_.mass*GRAVITY/5, -tocabi_.com_.mass*GRAVITY/10, 1, 0, 0, 0);
             left_ankle_roll_tune *= DyrosMath::cubic(l_ft_(2) , -tocabi_.com_.mass*GRAVITY/5, -tocabi_.com_.mass*GRAVITY/10, 1, 0, 0, 0);
@@ -4771,8 +4790,8 @@ Eigen::VectorQd TocabiController::tuneTorqueForZMPSafety(Eigen::VectorQd task_to
             
             Vector3d phi_support_ankle;
             phi_support_ankle = -DyrosMath::getPhi(tocabi_.link_[Right_Foot].Rotm, pelv_yaw_rot_current_from_global_);         
-            right_ankle_pitch_tune *= DyrosMath::cubic( abs(phi_support_ankle(1)) , 0.00, 0.05, 1, 0, 0, 0);
-            right_ankle_roll_tune *= DyrosMath::cubic( abs(phi_support_ankle(0)) , 0.00, 0.05, 1, 0, 0, 0);
+            right_ankle_pitch_tune *= DyrosMath::cubic( abs(phi_support_ankle(1)) , 0.01, 0.05, 1, 0, 0, 0);
+            right_ankle_roll_tune *= DyrosMath::cubic( abs(phi_support_ankle(0)) , 0.01, 0.05, 1, 0, 0, 0);
 
             right_ankle_pitch_tune *= DyrosMath::cubic(r_ft_(2) , -tocabi_.com_.mass*GRAVITY/5, -tocabi_.com_.mass*GRAVITY/10, 1, 0, 0, 0);
             right_ankle_roll_tune *= DyrosMath::cubic(r_ft_(2) , -tocabi_.com_.mass*GRAVITY/5, -tocabi_.com_.mass*GRAVITY/10, 1, 0, 0, 0);

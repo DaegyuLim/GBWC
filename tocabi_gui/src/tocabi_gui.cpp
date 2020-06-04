@@ -1,5 +1,3 @@
-
-
 #include "tocabi_gui/tocabi_gui.h"
 #include <pluginlib/class_list_macros.h>
 #include <iostream>
@@ -32,7 +30,7 @@ TocabiGui::TocabiGui()
     qRegisterMetaType<sensor_msgs::ImuConstPtr>();
     setObjectName("TocabiGui");
 
-    //initPlugin()
+    // initPlugin();
     pointsub = nh_.subscribe("/tocabi/point", 1, &TocabiGui::pointCallback, this);
     timesub = nh_.subscribe("/tocabi/time", 1, &TocabiGui::timerCallback, this);
     com_pub = nh_.advertise<std_msgs::String>("/tocabi/command", 1);
@@ -41,6 +39,8 @@ TocabiGui::TocabiGui()
     imusub = nh_.subscribe("/tocabi/imu", 1, &TocabiGui::imuCallback, this);
     task_pub = nh_.advertise<tocabi_controller::TaskCommand>("/tocabi/taskcommand", 100);
     arm_task_pub = nh_.advertise<tocabi_controller::ArmTaskCommand>("/tocabi/armtaskcommand", 100);
+    walkingspeed_pub = nh_.advertise<std_msgs::Float32 >("/tocabi/walkingspeedcommand", 100);
+    walkingduration_pub = nh_.advertise<std_msgs::Float32>("/tocabi/walkingdurationcommand", 100);
 
     gain_msg.data.resize(33);
     //ecatlabels = {ui_.}
@@ -122,7 +122,8 @@ void TocabiGui::initPlugin(qt_gui_cpp::PluginContext &context)
     connect(ui_.com_send_button, SIGNAL(pressed()), this, SLOT(comsendcb()));   
     connect(ui_.arm_send_button, SIGNAL(pressed()), this, SLOT(armsendcb()));
 
-    connect(ui_.walking_speed_slider, SIGNAL(sliderMoved()), this, SLOT(walkingspeedcb()));
+    connect(ui_.walking_speed_slider, SIGNAL(valueChanged(int)), this, SLOT(walkingspeedcb(int) ));
+    connect(ui_.walking_duration_slider, SIGNAL(valueChanged(int)), this, SLOT(walkingdurationcb(int) ));
 
     if (mode == "simulation")
     {
@@ -606,8 +607,22 @@ void TocabiGui::armsendcb()
 
 void TocabiGui::walkingspeedcb(int value)
 {
-
+    double max_speed = 1;
+    double min_speed = 0;
+    double scale = value;
+    walkingspeed_msg.data = scale/100*(max_speed - min_speed) + min_speed;
+    walkingspeed_pub.publish(walkingspeed_msg);
 }
+
+void TocabiGui::walkingdurationcb(int value)
+{
+    double max_duration = 1;
+    double min_duration = 0.3;
+
+    walkingduration_msg.data = value/100*(max_duration - min_duration) + min_duration;
+    walkingduration_pub.publish(walkingduration_msg);
+}
+
 void TocabiGui::imucb(const sensor_msgs::ImuConstPtr &msg)
 { /*
     //std::cout<<robot_time<<"msg->linacc"<<msg->linear_acceleration.x<<std::endl;

@@ -98,12 +98,14 @@ public:
   void tuiThread();
   void TaskCommandCallback(const tocabi_controller::TaskCommandConstPtr &msg);
   void ArmTaskCommandCallback(const tocabi_controller::ArmTaskCommandConstPtr &msg);
+  void WalkingSpeedCommandCallback(const std_msgs::Float32 &msg);
   void ContinuityChecker(double data);
   void ZMPmonitor();
   void pubfromcontroller();
   
   ros::Subscriber task_command;
   ros::Subscriber arm_task_command;
+  ros::Subscriber walking_speed_command;
   std::ofstream data_out;
 
   ros::Publisher point_pub;

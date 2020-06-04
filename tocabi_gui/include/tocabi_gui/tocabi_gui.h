@@ -112,6 +112,7 @@ protected slots:
     virtual void comsendcb();
     virtual void armsendcb();
     virtual void walkingspeedcb(int value);
+    virtual void walkingdurationcb(int value);
 
 
 private:
@@ -154,6 +155,12 @@ public:
     tocabi_controller::TaskCommand task_msg;
     ros::Publisher arm_task_pub;
     tocabi_controller::ArmTaskCommand arm_task_msg;
+
+    ros::Publisher walkingspeed_pub;
+    std_msgs::Float32 walkingspeed_msg;
+
+    ros::Publisher walkingduration_pub;
+    std_msgs::Float32 walkingduration_msg;
 
     ros::Subscriber imusub;
 
