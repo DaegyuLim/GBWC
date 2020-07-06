@@ -401,10 +401,10 @@
         <frameangvel name="Pelvis_angular_vel" objtype="site" objname="Pelvis_IMU"/>
     </sensor>
 
-
+ <!-- -0.8733046 0 0 -0.4871745  -->
     <keyframe>
         <!--Initial Position Setting -->
-        <key name="front" time="0" qpos ="0 0 1 1 0 0 0 
+        <key name="front" time="0" qpos ="0 0 1 1 0 0 0
 								0 0 0.02 0.1 -0.12 0 
 								0 0 0.02 0.1 -0.12 0 
 								0 0 0 0 0

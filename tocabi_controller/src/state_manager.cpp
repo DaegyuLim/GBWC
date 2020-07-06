@@ -403,7 +403,7 @@ void StateManager::stateThread2(void)
             // q_dot_virtual_ = DyrosMath::lpf(q_dot_virtual_raw_, q_dot_virtual_before, 2000, 60);
             q_dot_virtual_ = q_dot_virtual_raw_;
             q_dot_virtual_before = q_dot_virtual_;
-            initYaw();
+            // initYaw();
 
             if (shutdown_tocabi_bool)
             {
@@ -817,8 +817,8 @@ void StateManager::updateKinematics(RigidBodyDynamics::Model &model_l, const Eig
 
     link_[COM_id].Jac.setZero(6, MODEL_DOF + 6);
 
-    link_[COM_id].Jac.block(0, 0, 2, MODEL_DOF + 6) = jacobian_com.block(0, 0, 2, MODEL_DOF + 6) / com_.mass;
-    link_[COM_id].Jac.block(2, 0, 4, MODEL_DOF + 6) = link_[Pelvis].Jac.block(2, 0, 4, MODEL_DOF + 6);
+    link_[COM_id].Jac.block(0, 0, 3, MODEL_DOF + 6) = jacobian_com.block(0, 0, 3, MODEL_DOF + 6) / com_.mass;
+    link_[COM_id].Jac.block(3, 0, 3, MODEL_DOF + 6) = link_[Pelvis].Jac.block(3, 0, 3, MODEL_DOF + 6);
 
     link_[COM_id].Jac_COM_p = jacobian_com/com_.mass;
 
