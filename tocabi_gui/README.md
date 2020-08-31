@@ -1,1 +1,2 @@
-# dyros_tocabi_gui
+# tocabi_gui
+dg version GUI
